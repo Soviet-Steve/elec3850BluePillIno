@@ -7,6 +7,8 @@
 #define INDICATE_LEFT PA5
 #define INDICATE_RIGHT PA7
 
+#define HEADLIGHT_RAW PA_6
+
 #define MOTOR_INA PB9
 #define MOTOR_INB PB8
 
@@ -16,14 +18,42 @@
 #define SERVO PB11
 #define SERVO_RAW PB_11
 
+#define BATTERY_PIN PA4
+#define BATTERY_COVERSION 4096/3.3
+
 #define ANGLE_CONVERSION_COEFFECIENT 800/120
 #define ANGLE_CONVERSION_CONSTANT 2050
+
+#define HARD_LEFT -60
+
+
+
+//States
+#define INITIALISDATION 0 //Not using, will be implemented later when making the code more robust.
+#define FORWARD 1
+#define OBSTACLE_AVOIDANCE 2
+#define INDICATING 3
+#define TURNING 4
+#define STOP 5
+#define REVERSE 6
 
 //#define HIGH_ACCURACY
 //#define LONG_RANGE
 
 Servo wheels;
 VL53L0X vcselSensor;
+int state;
+int distance;
+int vBat;
+char txBuf[512];
+int headLightbrightness;
+
+void forward();
+void avoid(void);
+void indicate();
+void turn();
+void reverse();
+void checkSensors();
 
 void fnvdIndicateLeft();
 void fnvdIndicateRight();
@@ -42,9 +72,9 @@ void setup() {
   pinMode(MOTOR_PWM, OUTPUT);;
 
   digitalWrite(MOTOR_INA, HIGH);
-  digitalWrite(MOTOR_INB, LOW);
+  digitalWrite(MOTOR_INB, HIGH);
   digitalWrite(HEADLIGHT, HIGH);
-
+  pwm_start(MOTOR_PWM_RAW, 50, 20, PERCENT_COMPARE_FORMAT);
   Wire.begin();
   vcselSensor.setTimeout(500);
   if(!vcselSensor.init())
@@ -63,18 +93,74 @@ void setup() {
   #elif defined HIGH_ACCURACY
     vcselSensor.setMeasurementTimingBudget(200000);
   #endif
-  }
-void loop() {
-  int distance = 0;
 
-  distance = vcselSensor.readRangeSingleMillimeters();
-  if(distance < 4000)
-    Serial1.println(distance);
-  if (vcselSensor.timeoutOccurred()) 
-  { 
-    Serial1.println("TIMEOUT");
+  state = FORWARD;
+  analogReadResolution(12);
+}
+
+
+void loop() {
+  // digitalToggle(HEADLIGHT);
+  state = FORWARD;
+
+  switch(state)
+  {
+    case FORWARD:
+      forward();
+    break;
+    case OBSTACLE_AVOIDANCE:
+      avoid();
+    break;
+    case INDICATING:
+      indicate();
+    break;
+    case TURNING:
+      turn();
+    break;
+    case REVERSE:
+      reverse();
+    break;
   }
-  // delay(1000);
+
+  checkSensors();
+  sprintf(txBuf, "DisF: %d Vbat: %d \n", distance, (vBat));
+  Serial.printf(txBuf);
+  
+}
+
+void forward()
+{
+  digitalWrite(INDICATE_LEFT, LOW);
+  digitalWrite(MOTOR_INA, LOW);
+  digitalWrite(MOTOR_INB, HIGH);
+}
+
+void avoid(void)
+{
+  digitalWrite(MOTOR_INA, HIGH);
+  digitalWrite(MOTOR_INB, HIGH);
+}
+
+void indicate()
+{
+  digitalWrite(INDICATE_LEFT, HIGH);
+}
+
+void turn()
+{
+  turnServo(HARD_LEFT);
+}
+
+void reverse()
+{
+  digitalWrite(MOTOR_INA, LOW);
+  digitalWrite(MOTOR_INB, HIGH);
+}
+
+void checkSensors()
+{
+  distance = vcselSensor.readRangeSingleMillimeters();
+  vBat = analogRead(BATTERY_PIN);
 }
 
 void fnvdIndicateLeft(){
