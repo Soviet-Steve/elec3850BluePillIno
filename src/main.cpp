@@ -19,6 +19,9 @@
 #define ANGLE_CONVERSION_COEFFECIENT 800/120
 #define ANGLE_CONVERSION_CONSTANT 2050
 
+//#define HIGH_ACCURACY
+//#define LONG_RANGE
+
 Servo wheels;
 VL53L0X vcselSensor;
 
@@ -26,7 +29,6 @@ void fnvdIndicateLeft();
 void fnvdIndicateRight();
 void turnServo(int32_t angle);
 void deadState();
-
 
 void setup() {
   Serial1.begin(115200);
@@ -57,102 +59,22 @@ void setup() {
   #endif
 
   #if defined HIGH_SPEED
-    sensor.setMeasurementTimingBudget(20000);
+    vcselSensor.setMeasurementTimingBudget(20000);
   #elif defined HIGH_ACCURACY
-    sensor.setMeasurementTimingBudget(200000);
+    vcselSensor.setMeasurementTimingBudget(200000);
   #endif
-  /*
-  wheels.attach(SERVO);
-  wheels.write(90);
-  wheels.detach();
-  */
-  //pwm_start(PB_)
-  //pwm_start(MOTOR_PWM_RAW, 50, 50, PERCENT_COMPARE_FORMAT);
-  //pwm_start(SERVO_RAW, 50, 0, MICROSEC_COMPARE_FORMAT);
-  /*
-  for(int i = 1650; i <= 2450; i += 1)
-  {
-    pwm_start(SERVO_RAW, 50, i, MICROSEC_COMPARE_FORMAT);
-    delay(10);   
-  }
-  */
   }
 void loop() {
-  /*
-  String input = Serial1.readString();
-  int angle;
-  sscanf(input.c_str(), "%d", &angle); 
-  turnServo(angle);
-  Serial1.println(angle);
-  */
-
   int distance = 0;
 
   distance = vcselSensor.readRangeSingleMillimeters();
-  Serial1.println(distance);
+  if(distance < 4000)
+    Serial1.println(distance);
   if (vcselSensor.timeoutOccurred()) 
   { 
     Serial1.println("TIMEOUT");
   }
-  
-  //turnServo((int32_t)Serial1.parseInt());
-  /*
-  for(uint8_t i = 0; i < 100; i++){
-    // pwm_start(MOTOR_PWM_RAW, 50, i, PERCENT_COMPARE_FORMAT);
-    delay(120 - i);
-    pwm_start(SERVO_RAW, 50, 1600, MICROSEC_COMPARE_FORMAT);
-    
-  }
-  */
- //pwm_start(SERVO_RAW, 50, 1600, MICROSEC_COMPARE_FORMAT);
- /*
- for(int i = 0; i < 10000; i += 100)
- {
-   Serial1.println(i);
-   pwm_start(SERVO_RAW, 50, i + 1, MICROSEC_COMPARE_FORMAT);
-   delay(1000);
- }
- *//*
-  pwm_start(SERVO_RAW, 50, 1600, MICROSEC_COMPARE_FORMAT);
-  delay(1000);
-  pwm_start(SERVO_RAW, 50, 1500, MICROSEC_COMPARE_FORMAT);
-delay(1000);
-  pwm_start(SERVO_RAW, 50, 1400, MICROSEC_COMPARE_FORMAT);
-  delay(1000);
-  pwm_start(SERVO_RAW, 50, 1200, MICROSEC_COMPARE_FORMAT);
-  delay(1000);
-  pwm_start(SERVO_RAW, 50, 1000, MICROSEC_COMPARE_FORMAT);
-  delay(1000);
-  pwm_start(SERVO_RAW, 50, 100, MICROSEC_COMPARE_FORMAT);*/
-  // pwm_stop(SERVO_RAW);
-  
-  //Serial1.println("henlo");
-  /*
-  wheels.attach(SERVO);
-  wheels.write(90);
-  wheels.detach();
-  delay(10000);
-  */
-
-  /*
-  digitalToggle(MOTOR_PWM);
-  digitalToggle(HEADLIGHT);
-  fnvdIndicateRight();
-  digitalToggle(HEADLIGHT);
-  fnvdIndicateLeft();
-  */
-
- /*
-  for(int i = 0; i <= 100; i += 0.5)
-  {
-    analogWrite(MOTOR_PWM, i);
-  }
-  delay(1000);
-  for(int i = 100; i >= 0; i -= 0.5)
-  {
-    analogWrite(MOTOR_PWM, i);
-  }
-  */
+  // delay(1000);
 }
 
 void fnvdIndicateLeft(){
