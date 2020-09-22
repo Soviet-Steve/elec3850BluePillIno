@@ -101,8 +101,11 @@ void setup() {
 
 void loop() {
   // digitalToggle(HEADLIGHT);
-  state = FORWARD;
-
+  if(distance > 200)
+    state = FORWARD;
+  else
+    state = avoid;
+  
   switch(state)
   {
     case FORWARD:
