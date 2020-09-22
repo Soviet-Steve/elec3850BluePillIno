@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <Servo.h>
+#include <Wire.h>
+#include <VL53L0X.h>
 
 #define HEADLIGHT PA6
 #define INDICATE_LEFT PA5
@@ -18,17 +20,18 @@
 #define ANGLE_CONVERSION_CONSTANT 2050
 
 Servo wheels;
+VL53L0X vcselSensor;
 
 void fnvdIndicateLeft();
 void fnvdIndicateRight();
-
 void turnServo(int32_t angle);
+void deadState();
 
 
 void setup() {
   Serial1.begin(115200);
   //for(;;)
-    Serial1.println("henlo");
+  Serial1.println("henlo");
   pinMode(HEADLIGHT, OUTPUT);
   pinMode(INDICATE_LEFT, OUTPUT);
   pinMode(INDICATE_RIGHT, OUTPUT);
@@ -39,6 +42,25 @@ void setup() {
   digitalWrite(MOTOR_INA, HIGH);
   digitalWrite(MOTOR_INB, LOW);
   digitalWrite(HEADLIGHT, HIGH);
+
+  Wire.begin();
+  vcselSensor.setTimeout(500);
+  if(!vcselSensor.init())
+  {
+    Serial1.print("Sesnor initialisation failed.");
+    deadState();
+  }
+  #if defined LONG_RANGE
+    vcselSensor.setSignalRateLimit(0.1);
+    vcselSensor.setVcselPulsePeriod(VL53L0X::VcselPeriodPreRange, 18);
+    vcselSensor.setVcselPulsePeriod(VL53L0X::VcselPeriodFinalRange, 14);
+  #endif
+
+  #if defined HIGH_SPEED
+    sensor.setMeasurementTimingBudget(20000);
+  #elif defined HIGH_ACCURACY
+    sensor.setMeasurementTimingBudget(200000);
+  #endif
   /*
   wheels.attach(SERVO);
   wheels.write(90);
@@ -56,12 +78,24 @@ void setup() {
   */
   }
 void loop() {
-  String input = Serial.readString();
+  /*
+  String input = Serial1.readString();
   int angle;
   sscanf(input.c_str(), "%d", &angle); 
   turnServo(angle);
-  Serial.println(angle);
-  //turnServo((int32_t)Serial.parseInt());
+  Serial1.println(angle);
+  */
+
+  int distance = 0;
+
+  distance = vcselSensor.readRangeSingleMillimeters();
+  Serial1.println(distance);
+  if (vcselSensor.timeoutOccurred()) 
+  { 
+    Serial1.println("TIMEOUT");
+  }
+  
+  //turnServo((int32_t)Serial1.parseInt());
   /*
   for(uint8_t i = 0; i < 100; i++){
     // pwm_start(MOTOR_PWM_RAW, 50, i, PERCENT_COMPARE_FORMAT);
@@ -74,7 +108,7 @@ void loop() {
  /*
  for(int i = 0; i < 10000; i += 100)
  {
-   Serial.println(i);
+   Serial1.println(i);
    pwm_start(SERVO_RAW, 50, i + 1, MICROSEC_COMPARE_FORMAT);
    delay(1000);
  }
@@ -92,7 +126,7 @@ delay(1000);
   pwm_start(SERVO_RAW, 50, 100, MICROSEC_COMPARE_FORMAT);*/
   // pwm_stop(SERVO_RAW);
   
-  //Serial.println("henlo");
+  //Serial1.println("henlo");
   /*
   wheels.attach(SERVO);
   wheels.write(90);
@@ -145,4 +179,11 @@ void turnServo(int32_t angle)
   //-60 - 60
   int value = (angle * ANGLE_CONVERSION_COEFFECIENT) + ANGLE_CONVERSION_CONSTANT;
   pwm_start(SERVO_RAW, 50, value, MICROSEC_COMPARE_FORMAT);
+}
+
+void deadState()
+{
+  Serial1.println("The dead state has been entered.");
+  bool error = true;
+  while(error);
 }
