@@ -41,9 +41,11 @@
 #define FORWARD 1
 #define OBSTACLE_AVOIDANCE 2
 #define INDICATING 3
-#define TURNING 4
-#define STOP 5
-#define REVERSE 6
+#define TURNING_RIGHT 4
+#define TURNING_LEFT 5
+#define TURNING_STRAIGHT 6
+#define STOP 7
+#define REVERSE 8
 
 //#define HIGH_ACCURACY
 //#define LONG_RANGE
@@ -55,6 +57,9 @@ int distance;
 int vBat;
 char txBuf[512];
 int headLightbrightness;
+sensors_event_t accel, mag, gyro, temp;
+long timeMils = 0;
+
 
 void forward();
 void avoid(void);
@@ -62,11 +67,14 @@ void indicate();
 void turn();
 void reverse();
 void checkSensors();
+void display();
 
 void fnvdIndicateLeft();
 void fnvdIndicateRight();
 void turnServo(int32_t angle);
 void deadState();
+
+//void(* fnReset)(void) = 0;
 
 void setup() {
   Serial1.begin(115200);
@@ -81,12 +89,13 @@ void setup() {
 
   digitalWrite(MOTOR_INA, HIGH);
   digitalWrite(MOTOR_INB, HIGH);
-  digitalWrite(HEADLIGHT, HIGH);
+  digitalWrite(HEADLIGHT, LOW);
   pwm_start(MOTOR_PWM_RAW, 50, 90, PERCENT_COMPARE_FORMAT);
   
   if(!imu.begin())
   {
     Serial.println("IMU initialisation failed.");
+    //fnReset();
     deadState();
   }
   imu.setupAccel(imu.LSM9DS1_ACCELRANGE_2G);
@@ -99,6 +108,7 @@ void setup() {
   if(!vcselSensor.init())
   {
     Serial1.print("VCSEL initialisation failed.");
+    //fnReset();
     deadState();
   }
   #if defined LONG_RANGE
@@ -120,18 +130,14 @@ void setup() {
 
 
 void loop() {
-
-  imu.read();
-  sensors_event_t accel, mag, gyro, temp;
-  imu.getEvent(&accel, &mag, &gyro, &temp);
-  Serial.print("X acceleration: ");
-  Serial.println(accel.acceleration.x);
-  Serial.print("Y acceleration: ");
-  Serial.println(accel.acceleration.y);
-  Serial.print("Z acceleration: ");
-  Serial.println(accel.acceleration.z);
-
-  // // digitalToggle(HEADLIGHT);
+  checkSensors();
+  // sscanf(txBuf, "X acceleration: %f\nY acceleration: %f\nZ acceleration: %f\n", accel.acceleration.x, accel.acceleration.y, accel.acceleration.z);
+  // Serial.printf("X acceleration: %f\nY acceleration: %f\nZ acceleration: %f\n", accel.acceleration.x, accel.acceleration.y, accel.acceleration.z); 
+  if(timeMils < (long)(millis()/* - 1000*/)){
+    display();
+    timeMils = millis();
+  }
+  
   // if(distance > 300)
   //   state = FORWARD;
   // else
@@ -156,7 +162,7 @@ void loop() {
   //   break;
   // }
 
-  // checkSensors();
+  // 
   // sprintf(txBuf, "DisF: %d Vbat: %d \n", distance, (vBat));
   // Serial.printf(txBuf);
   
@@ -193,6 +199,8 @@ void reverse()
 
 void checkSensors()
 {
+  imu.read();
+  imu.getEvent(&accel, &mag, &gyro, &temp);
   distance = vcselSensor.readRangeSingleMillimeters();
   vBat = analogRead(BATTERY_PIN);
 }
@@ -228,4 +236,31 @@ void deadState()
   Serial1.println("The dead state has been entered.");
   bool error = true;
   while(error);
+}
+
+void display(){
+  Serial.print("X acceleration: ");
+  Serial.print(accel.acceleration.x - 0.2);
+  Serial.print("\t");
+  Serial.print("Y acceleration: ");
+  Serial.print(accel.acceleration.y);
+  Serial.print("\t");
+  Serial.print("Z acceleration: ");
+  Serial.print((accel.acceleration.z - 9.46));
+  Serial.print("\t");
+  Serial.print("Gyro X: ");
+  Serial.print(gyro.gyro.x);   
+  Serial.print("\t");
+  Serial.print("Gyro Y: ");
+  Serial.print(gyro.gyro.y);
+  Serial.print("\t");
+  Serial.print("Gyro Z: ");
+  Serial.print(gyro.gyro.z);      
+  Serial.print("\t");
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.print("\t");
+  Serial.print("Battery Voltage: ");
+  Serial.print(vBat);
+  Serial.print("\n");
 }
