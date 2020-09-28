@@ -2,6 +2,7 @@
 #include <Servo.h>
 #include <Wire.h>
 #include <VL53L0X.h>
+#include <Adafruit_LSM9DS1.h>
 
 #define HEADLIGHT PA6
 #define INDICATE_LEFT PA5
@@ -17,6 +18,13 @@
 
 #define SERVO PB11
 #define SERVO_RAW PB_11
+
+#define LSM9DS1_M_CS	PA15
+#define LSM9DS1_AG_CS	PB13
+
+#define LSM9DS1_SCK PB3
+#define LSM9DS1_MISO PB4
+#define LSM9DS1_MOSI PB5
 
 #define BATTERY_PIN PA4
 #define BATTERY_COVERSION 4096/3.3
@@ -39,9 +47,9 @@
 
 //#define HIGH_ACCURACY
 //#define LONG_RANGE
-
 Servo wheels;
 VL53L0X vcselSensor;
+Adafruit_LSM9DS1 imu = Adafruit_LSM9DS1(LSM9DS1_SCK, LSM9DS1_MISO, LSM9DS1_MOSI, LSM9DS1_AG_CS, LSM9DS1_M_CS);
 int state;
 int distance;
 int vBat;
@@ -74,12 +82,23 @@ void setup() {
   digitalWrite(MOTOR_INA, HIGH);
   digitalWrite(MOTOR_INB, HIGH);
   digitalWrite(HEADLIGHT, HIGH);
-  pwm_start(MOTOR_PWM_RAW, 50, 20, PERCENT_COMPARE_FORMAT);
+  pwm_start(MOTOR_PWM_RAW, 50, 90, PERCENT_COMPARE_FORMAT);
+  
+  if(!imu.begin())
+  {
+    Serial.println("IMU initialisation failed.");
+    deadState();
+  }
+  imu.setupAccel(imu.LSM9DS1_ACCELRANGE_2G);
+  imu.setupMag(imu.LSM9DS1_MAGGAIN_4GAUSS);
+  imu.setupGyro(imu.LSM9DS1_GYROSCALE_245DPS);
+
+
   Wire.begin();
   vcselSensor.setTimeout(500);
   if(!vcselSensor.init())
   {
-    Serial1.print("Sesnor initialisation failed.");
+    Serial1.print("VCSEL initialisation failed.");
     deadState();
   }
   #if defined LONG_RANGE
@@ -96,38 +115,50 @@ void setup() {
 
   state = FORWARD;
   analogReadResolution(12);
+  turnServo(1);
 }
 
 
 void loop() {
-  // digitalToggle(HEADLIGHT);
-  if(distance > 200)
-    state = FORWARD;
-  else
-    state = avoid;
-  
-  switch(state)
-  {
-    case FORWARD:
-      forward();
-    break;
-    case OBSTACLE_AVOIDANCE:
-      avoid();
-    break;
-    case INDICATING:
-      indicate();
-    break;
-    case TURNING:
-      turn();
-    break;
-    case REVERSE:
-      reverse();
-    break;
-  }
 
-  checkSensors();
-  sprintf(txBuf, "DisF: %d Vbat: %d \n", distance, (vBat));
-  Serial.printf(txBuf);
+  imu.read();
+  sensors_event_t accel, mag, gyro, temp;
+  imu.getEvent(&accel, &mag, &gyro, &temp);
+  Serial.print("X acceleration: ");
+  Serial.println(accel.acceleration.x);
+  Serial.print("Y acceleration: ");
+  Serial.println(accel.acceleration.y);
+  Serial.print("Z acceleration: ");
+  Serial.println(accel.acceleration.z);
+
+  // // digitalToggle(HEADLIGHT);
+  // if(distance > 300)
+  //   state = FORWARD;
+  // else
+  //   state = OBSTACLE_AVOIDANCE;
+  
+  // switch(state)
+  // {
+  //   case FORWARD:
+  //     forward();
+                                      //   break;
+  //   case OBSTACLE_AVOIDANCE:
+  //     avoid();
+  //   break;
+  //   case INDICATING:
+  //     indicate();
+  //   break;
+  //   case TURNING:
+  //     turn();
+  //   break;
+  //   case REVERSE:
+  //     reverse();
+  //   break;
+  // }
+
+  // checkSensors();
+  // sprintf(txBuf, "DisF: %d Vbat: %d \n", distance, (vBat));
+  // Serial.printf(txBuf);
   
 }
 
