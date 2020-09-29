@@ -1,3 +1,4 @@
+#define INITIALISDATION 0 //Not using, will be implemented later when making the code more robust.
 #include <Arduino.h>
 #include <Servo.h>
 #include <Wire.h>
@@ -5,8 +6,8 @@
 #include <Adafruit_LSM9DS1.h>
 
 #define HEADLIGHT PA6
-#define INDICATE_LEFT PA5
-#define INDICATE_RIGHT PA7
+#define INDICATOR_LEFT PA5
+#define INDICATOR_RIGHT PA7
 
 #define HEADLIGHT_RAW PA_6
 
@@ -27,12 +28,14 @@
 #define LSM9DS1_MOSI PB5
 
 #define BATTERY_PIN PA4
+#define BATTERY_RAW PA_4
 #define BATTERY_COVERSION 4096/3.3
 
 #define ANGLE_CONVERSION_COEFFECIENT 800/120
 #define ANGLE_CONVERSION_CONSTANT 2050
 
 #define HARD_LEFT -60
+#define HARD_RIGHT 60
 
 
 
@@ -40,22 +43,24 @@
 #define INITIALISDATION 0 //Not using, will be implemented later when making the code more robust.
 #define FORWARD 1
 #define OBSTACLE_AVOIDANCE 2
-#define INDICATING 3
-#define TURNING_RIGHT 4
-#define TURNING_LEFT 5
-#define TURNING_STRAIGHT 6
-#define STOP 7
-#define REVERSE 8
+#define INDICATING_LEFT 3
+#define INDICATING_RIGHT 4
+#define TURNING_RIGHT 5
+#define TURNING_LEFT 6
+#define TURNING_STRAIGHT 7
+#define STOP 8
+#define REVERSE 9
 
 //#define HIGH_ACCURACY
 //#define LONG_RANGE
 Servo wheels;
 VL53L0X vcselSensor;
 Adafruit_LSM9DS1 imu = Adafruit_LSM9DS1(LSM9DS1_SCK, LSM9DS1_MISO, LSM9DS1_MOSI, LSM9DS1_AG_CS, LSM9DS1_M_CS);
-int state;
+int state = STOP;
 int distance;
 int vBat;
 char txBuf[512];
+char rxBuf[32];
 int headLightbrightness;
 sensors_event_t accel, mag, gyro, temp;
 long timeMils = 0;
@@ -63,9 +68,11 @@ long timeMils = 0;
 
 void forward();
 void avoid(void);
-void indicate();
-void turn();
+void indicate(int direction);
+void turn(int direction);
 void reverse();
+void turnStraight();
+void stop();
 void checkSensors();
 void display();
 
@@ -77,12 +84,21 @@ void deadState();
 //void(* fnReset)(void) = 0;
 
 void setup() {
+  // delay(10000);
   Serial1.begin(115200);
+  Serial.setTimeout(10);
+  //  while(1){
+  //    Serial.flush();
+  //    Serial.print(state);
+  //    //state = Serial.parseInt();
+  //    Serial.readBytesUntil(';', rxBuf, 32);
+  //    sscanf(rxBuf, "%d", &state);    
+  // }
   //for(;;)
   Serial1.println("henlo");
   pinMode(HEADLIGHT, OUTPUT);
-  pinMode(INDICATE_LEFT, OUTPUT);
-  pinMode(INDICATE_RIGHT, OUTPUT);
+  pinMode(INDICATOR_LEFT, OUTPUT);
+  pinMode(INDICATOR_RIGHT, OUTPUT);
   pinMode(MOTOR_INA, OUTPUT);
   pinMode(MOTOR_INB, OUTPUT);
   pinMode(MOTOR_PWM, OUTPUT);;
@@ -90,7 +106,7 @@ void setup() {
   digitalWrite(MOTOR_INA, HIGH);
   digitalWrite(MOTOR_INB, HIGH);
   digitalWrite(HEADLIGHT, LOW);
-  pwm_start(MOTOR_PWM_RAW, 50, 90, PERCENT_COMPARE_FORMAT);
+  pwm_start(MOTOR_PWM_RAW, 50, 20, PERCENT_COMPARE_FORMAT);
   
   if(!imu.begin())
   {
@@ -124,7 +140,6 @@ void setup() {
   #endif
 
   state = FORWARD;
-  analogReadResolution(12);
   turnServo(1);
 }
 
@@ -137,40 +152,53 @@ void loop() {
     display();
     timeMils = millis();
   }
-  
+  Serial.flush();
+  Serial.readBytesUntil(';', rxBuf, 32);
+  sscanf(rxBuf, "%d", &state);
   // if(distance > 300)
   //   state = FORWARD;
   // else
   //   state = OBSTACLE_AVOIDANCE;
   
-  // switch(state)
-  // {
-  //   case FORWARD:
-  //     forward();
-                                      //   break;
-  //   case OBSTACLE_AVOIDANCE:
-  //     avoid();
-  //   break;
-  //   case INDICATING:
-  //     indicate();
-  //   break;
-  //   case TURNING:
-  //     turn();
-  //   break;
-  //   case REVERSE:
-  //     reverse();
-  //   break;
-  // }
-
-  // 
-  // sprintf(txBuf, "DisF: %d Vbat: %d \n", distance, (vBat));
-  // Serial.printf(txBuf);
+  state = 0;
+  switch(state)
+  {
+    case FORWARD:
+      forward();
+    break;
+    case OBSTACLE_AVOIDANCE:
+      avoid();
+    break;
+    case INDICATING_LEFT:
+      indicate(INDICATING_LEFT);
+    break;
+    case INDICATING_RIGHT:
+      indicate(INDICATING_RIGHT);
+    break;
+    case TURNING_LEFT:
+      turn(TURNING_LEFT);
+    break;
+    case TURNING_RIGHT:
+        turn(TURNING_RIGHT);
+    break;
+    case TURNING_STRAIGHT:
+        turnStraight();
+    break;
+    case REVERSE:
+        reverse();
+    break;
+    case STOP:
+    case 0:
+        stop();
+    break;
+  }
   
 }
 
 void forward()
 {
-  digitalWrite(INDICATE_LEFT, LOW);
+  digitalWrite(INDICATOR_LEFT, LOW);
+  digitalWrite(INDICATOR_RIGHT, LOW);
   digitalWrite(MOTOR_INA, LOW);
   digitalWrite(MOTOR_INB, HIGH);
 }
@@ -181,20 +209,67 @@ void avoid(void)
   digitalWrite(MOTOR_INB, HIGH);
 }
 
-void indicate()
+void indicate(int direction)
 {
-  digitalWrite(INDICATE_LEFT, HIGH);
+    if(direction == INDICATING_LEFT)
+    {
+        digitalWrite(INDICATOR_LEFT, HIGH);
+    }
+    else
+    {
+        if(direction == INDICATING_RIGHT)
+        {
+            digitalWrite(INDICATOR_RIGHT, HIGH);
+        }
+        else
+        {
+            deadState();
+        }
+        
+    }
 }
 
-void turn()
+void turn(int direction)
 {
-  turnServo(HARD_LEFT);
+    if(direction == TURNING_LEFT)
+    {
+        turnServo(HARD_LEFT);
+    }
+    else
+    {
+        if(direction == TURNING_RIGHT)
+        {
+            turnServo(HARD_RIGHT);
+        }
+        else
+        {
+            deadState();
+        }
+        
+    }
+}
+
+void turnStraight()
+{
+    turnServo(0);
 }
 
 void reverse()
 {
-  digitalWrite(MOTOR_INA, LOW);
-  digitalWrite(MOTOR_INB, HIGH);
+    digitalWrite(HEADLIGHT, HIGH);
+    digitalWrite(INDICATOR_LEFT, LOW);
+    digitalWrite(INDICATOR_RIGHT, LOW);
+    digitalWrite(MOTOR_INA, HIGH);
+    digitalWrite(MOTOR_INB, LOW);
+}
+
+void stop()
+{
+    digitalWrite(INDICATOR_LEFT, LOW);
+    digitalWrite(INDICATOR_RIGHT, LOW);
+    digitalWrite(HEADLIGHT, LOW);
+    digitalWrite(MOTOR_INA, HIGH);
+    digitalWrite(MOTOR_INB, HIGH);
 }
 
 void checkSensors()
@@ -202,9 +277,10 @@ void checkSensors()
   imu.read();
   imu.getEvent(&accel, &mag, &gyro, &temp);
   distance = vcselSensor.readRangeSingleMillimeters();
-  vBat = analogRead(BATTERY_PIN);
+  vBat = adc_read_value(BATTERY_RAW, 8);
 }
 
+/*
 void fnvdIndicateLeft(){
   for(uint8_t i = 0; i < 6; i++){
     digitalToggle(INDICATE_LEFT);
@@ -218,6 +294,8 @@ void fnvdIndicateRight(){
     delay(500);
   }
 }
+*/
+
 
 void turnServo(int32_t angle)
 {
@@ -239,6 +317,7 @@ void deadState()
 }
 
 void display(){
+  /*
   Serial.print("X acceleration: ");
   Serial.print(accel.acceleration.x - 0.2);
   Serial.print("\t");
@@ -257,10 +336,14 @@ void display(){
   Serial.print("Gyro Z: ");
   Serial.print(gyro.gyro.z);      
   Serial.print("\t");
+  */
   Serial.print("Distance: ");
   Serial.print(distance);
   Serial.print("\t");
-  Serial.print("Battery Voltage: ");
-  Serial.print(vBat);
+  // Serial.print("Battery Voltage: ");
+  // Serial.print(vBat);
+  // Serial.print("\t");
+  Serial.print("State: ");
+  Serial.print(state);
   Serial.print("\n");
 }
